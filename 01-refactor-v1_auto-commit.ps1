@@ -1,6 +1,7 @@
 $currentDir = Get-Location
 $mainDir = Split-Path -Path $currentDir -Parent
 
+
 function Get-EnvVariable {
     param (
         [string]$Variable
@@ -22,7 +23,6 @@ function Get-EnvVariable {
     }
 }
 
-
 function Get-GitHubUserName {
     try {
         $user = Get-EnvVariable -Variable "GITHUBUSERNAME"
@@ -35,7 +35,6 @@ function Get-GitHubUserName {
         Exit 1
     }
 }
-
 
 function Get-ProjectName {
     try {
@@ -75,6 +74,16 @@ function Get-GitHubProjectURL {
         $githubUsername = Get-GitHubUserName
         $projectName = Get-ProjectName
         $URL = "https://github.com/$githubUsername/$projectName.git"
+
+        # & git ls-remote --exit-code -h $URL | Out-Null
+        # if ($LASTEXITCODE -ne 0) {
+        #     if ($CreateIfNotExist) {
+        #         Get-ProjectRepo # Create project repository
+        #         return $URL
+        #     } else {
+        #         return $false
+        #     }
+        # }
         return $URL
     } catch {
         Write-Error "Error in Get-GitHubProjectURL: $_"
@@ -85,11 +94,15 @@ function Get-GitHubProjectURL {
 
 function Get-LogDir {
     try {
+        # Relative path of auto commit environment variables
+        # Check if $envPath is NULL or if the file does not exist
         if ([string]::IsNullOrEmpty($envPath) -or !(Test-Path -Path $envPath)) {
+            # Define your own variables
             $logDir = "logs"
         } else {
             $logDir = Get-EnvVariable -envPath $envPath -variableName "AUTOLOGDIR"
         }
+        # Full path of auto commit environment variables
         $logDirPath = Join-Path -Path $currentDir -ChildPath $logDir
         return $logDirPath
     } catch {
@@ -115,6 +128,7 @@ function Get-LogFiles {
         Exit 1
     }
 }
+# Get-LogFiles -Path $logDirPath -ScriptName "Create-LogFileError" -LogType "error"
 
 
 function Get-LogErrorHandling {
@@ -124,17 +138,24 @@ function Get-LogErrorHandling {
     )
     $logPath = Get-LogDir 
     try {
+        # Check if log directory exists, if not, create it
         if (-not (Test-Path -Path $logPath)) {
             New-Item -ItemType Directory -Force -Path $logPath
         }
+        
+        # Call the Get-LogFiles function to get the log file path
         $logFilePath = Get-LogFiles -Path $logDirPath -ScriptName "auto-git" -LogType "error"
+
         $errorMessage = "An error occurred: $errorMessage"
+
+        # Write the error message to the log file
         $errorMessage | Out-File -Append -FilePath $logFilePath
     } catch {
         Write-Error "Failed to write to log file: $_"
     }
     Write-Error $errorMessage
 }
+# Get-LogErrorHandling
 
 
 function Get-GitInit {
@@ -167,19 +188,23 @@ function Get-GitInit {
 
 function Get-GitUpdate {
     try {
+        # Run git pull and check for errors
         $gitPullOutput = & git pull origin master --allow-unrelated-histories  2>&1
         if ($LASTEXITCODE -ne 0) {
             throw "git pull failed with message: $gitPullOutput"
         }
 
+        # Add all changes to git
         $gitAddOutput = & git add . 2>&1
         if ($LASTEXITCODE -ne 0) {
             throw "git add failed with message: $gitAddOutput"
         }
 
+        # Commit changes
         $commitMessage = "Update some codes"
         $gitCommitOutput = & git commit -m $commitMessage 2>&1
         if ($LASTEXITCODE -ne 0) {
+            # Assuming you want to log the situation where there are no changes to commit
             if ($gitCommitOutput -match 'nothing to commit') {
                 Write-Host "No changes to commit."
             } else {
@@ -192,12 +217,16 @@ function Get-GitUpdate {
         # Push changes
         $gitPushOutput = & git push -u origin master 2>&1
         if ($LASTEXITCODE -ne 0) {
+            # Check if the output is the 'Everything up-to-date' message or matches the specific project URL
             if ($gitPushOutput -match 'Everything up-to-date' -or $gitPushOutput -match 'To https:') {
+                # It's a regular message, not an error
                 Write-Host "Git push status: $gitPushOutput"
             } else {
+                # It's an unexpected message, handle it as an error
                 throw "git push encountered an issue: $gitPushOutput"
             }
         } else {
+            # The operation was successful (based on the exit code)
             Write-Host "Git push successful. Output: $gitPushOutput"
         }
     }
@@ -239,14 +268,17 @@ function Set-GitRemoteURL {
 
 function Update-NewRepo {
     try {
+        # Add all changes to git
         $gitAddOutput = & git add . 2>&1
         if ($LASTEXITCODE -ne 0) {
             throw "git add failed with message: $gitAddOutput"
         }
 
+        # Commit changes
         $commitMessage = "Initial commit"
         $gitCommitOutput = & git commit -m $commitMessage 2>&1
         if ($LASTEXITCODE -ne 0) {
+            # Assuming you want to log the situation where there are no changes to commit
             if ($gitCommitOutput -match 'nothing to commit') {
                 Write-Host "No changes to commit."
             } else {
@@ -256,14 +288,19 @@ function Update-NewRepo {
             Write-Host "Commit successful: $gitCommitOutput"
         }
 
+        # Push changes
         $gitPushOutput = & git push -u origin master 2>&1
         if ($LASTEXITCODE -ne 0) {
+            # Check if the output is the 'Everything up-to-date' message or matches the specific project URL
             if ($gitPushOutput -match 'Everything up-to-date' -or $gitPushOutput -match 'To https:') {
+                # It's a regular message, not an error
                 Write-Host "Git push status: $gitPushOutput"
             } else {
+                # It's an unexpected message, handle it as an error
                 throw "git push encountered an issue: $gitPushOutput"
             }
         } else {
+            # The operation was successful (based on the exit code)
             Write-Host "Git push successful. Output: $gitPushOutput"
         }
     }
@@ -281,6 +318,7 @@ function Update-ProjectRepo {
         $gitFile = "$mainDir/.git"
         Set-Location -Path $mainDir
 
+        # Check if git init exists
         if ((Test-Path $gitFile)) {
 
             $repoURL = Get-GitHubProjectURL
@@ -299,7 +337,6 @@ function Update-ProjectRepo {
             }
 
         } else {
-            Remove-Item -Path $gitFile  -Recurse -Force
             Get-GitInit
             Update-NewRepo
         }
