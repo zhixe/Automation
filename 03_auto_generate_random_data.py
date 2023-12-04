@@ -1,8 +1,5 @@
-import csv
-import random
+import csv, random, time
 from datetime import datetime,timedelta
-import time
-
 from faker import Faker
 
 fake = Faker()
